@@ -179,6 +179,42 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
             console.log("Transcribed original text:", data.text);
           }
           
+          // Capture original transcripts (from user speech)
+          if (data.type === 'conversation.item.input_audio_transcription.completed' && data.transcript) {
+            processedTextRef.current = data.transcript.trim();
+            console.log("Original speech transcript:", processedTextRef.current);
+            
+            // If we already have a translation, send the complete message
+            if (translationResultRef.current.translatedText) {
+              onNewMessage(
+                translationResultRef.current.translatedText, 
+                processedTextRef.current
+              );
+              
+              // Reset for next translation
+              processedTextRef.current = '';
+              translationResultRef.current.translatedText = '';
+            }
+          }
+          
+          // Capture translated transcripts (from assistant)
+          if (data.type === 'response.audio_transcript.done' && data.transcript) {
+            translationResultRef.current.translatedText = data.transcript.trim();
+            console.log("Translation received:", translationResultRef.current.translatedText);
+            
+            // If we already have the original text, send the complete message
+            if (processedTextRef.current) {
+              onNewMessage(
+                translationResultRef.current.translatedText, 
+                processedTextRef.current
+              );
+              
+              // Reset for next translation
+              processedTextRef.current = '';
+              translationResultRef.current.translatedText = '';
+            }
+          }
+          
           // Handle different types of messages from OpenAI
           if (data.type === 'text_delta' && data.text) {
             translationResultRef.current.translatedText += data.text;
@@ -198,7 +234,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
                 // Reset for next translation
                 processedTextRef.current = '';
                 translationResultRef.current.translatedText = '';
-                translationResultRef.current.originalText = '';
               }
             }
           } else if (data.type === 'conversation.item.update' || data.type === 'response.final') {
