@@ -4,7 +4,7 @@ import { addMessage } from '../redux/messagesSlice';
 import AudioRecorder from './AudioRecorder';
 import MessageList from './MessageList';
 
-const InterpreterInterface = () => {
+const InterpreterInterface = ({ showConversationOnly = false }) => {
   const dispatch = useDispatch();
   const userRole = useSelector((state) => state.user.role);
   const userLanguage = useSelector((state) => state.user.language);
@@ -27,6 +27,15 @@ const InterpreterInterface = () => {
     };
     dispatch(addMessage(newMessage));
   };
+
+  if (showConversationOnly) {
+    return (
+      <div className="conversation-container">
+        <MessageList messages={messages} userRole={userRole} />
+        <div ref={messageEndRef} />
+      </div>
+    );
+  }
 
   return (
     <div className="interpreter-interface">

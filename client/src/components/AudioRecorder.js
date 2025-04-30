@@ -67,122 +67,41 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     }
   };
 
-  // Implementation of function handlers for OpenAI API function calling
-  const functionHandlers = {
-    translateText: ({ text, sourceLanguage, targetLanguage }) => {
-      console.log(`Translating from ${sourceLanguage} to ${targetLanguage}: ${text}`);
-      translationResultRef.current.originalText = text;
-      translationResultRef.current.translatedText = ''; // Reset until we get the translation
-      return { success: true, received: true };
-    },
-    
-    providedTranslation: ({ translatedText }) => {
-      console.log(`Received translation: ${translatedText}`);
-      translationResultRef.current.translatedText = translatedText;
-      // Now that we have the translation, update the UI with both original and translated text
-      onNewMessage(
-        translationResultRef.current.translatedText,
-        translationResultRef.current.originalText
-      );
-      return { success: true };
-    },
-    
-    transcribeAudio: ({ audioUrl }) => {
-      // This would be called if OpenAI wants to handle audio transcription
-      // In our case, we're doing this ourselves, but we could implement this
-      console.log(`Would transcribe audio from: ${audioUrl}`);
-      return { success: true, handled: 'client-side' };
-    }
-  };
-
-  // Configure the data channel with function definitions
+  // Configure the data channel with function definitions and strict translation instructions
   const configureDataChannel = () => {
     if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
       console.error("Data channel not ready for configuration");
       return;
     }
 
-    console.log('Configuring data channel with translation tools');
+    console.log('Configuring data channel with strict translation instructions');
     
     const event = {
       type: 'session.update',
+      event_id: crypto.randomUUID(),
       session: {
         modalities: ['text', 'audio'],
-        tools: [
-          {
-            type: 'function',
-            name: 'translateText',
-            description: 'Translates text from one language to another',
-            parameters: {
-              type: 'object',
-              properties: {
-                text: { type: 'string', description: 'Text to translate' },
-                sourceLanguage: { type: 'string', description: 'Source language code (e.g., "en", "es")' },
-                targetLanguage: { type: 'string', description: 'Target language code (e.g., "en", "es")' }
-              },
-              required: ['text', 'sourceLanguage', 'targetLanguage']
-            }
-          },
-          {
-            type: 'function',
-            name: 'providedTranslation',
-            description: 'Provides the translated text from the model to display to the user',
-            parameters: {
-              type: 'object',
-              properties: {
-                translatedText: { type: 'string', description: 'The translated text to be displayed' }
-              },
-              required: ['translatedText']
-            }
-          },
-          {
-            type: 'function',
-            name: 'transcribeAudio',
-            description: 'Transcribes audio to text',
-            parameters: {
-              type: 'object',
-              properties: {
-                audioUrl: { type: 'string', description: 'URL of the audio to transcribe' }
-              },
-              required: ['audioUrl']
-            }
-          }
-        ]
+        instructions: "You are a PURE TRANSLATOR. Your sole purpose is to translate the user's speech from English to Spanish, nothing more. DO NOT respond to questions or engage in conversation. DO NOT provide any additional information. Your response should ONLY consist of the Spanish translation of what the user said. Follow medical terminology accurately if present.",
+        voice: "alloy", // Using a voice that works well for Spanish
+        input_audio_format: "pcm16",
+        output_audio_format: "pcm16",
+        input_audio_transcription: {
+          model: "whisper-1"
+        },
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500,
+          create_response: true
+        },
+        temperature: 0.6, // Lower temperature for more accurate translations
+        max_response_output_tokens: "inf"
       }
     };
     
     dataChannelRef.current.send(JSON.stringify(event));
-  };
-
-  // Handle function calls from the OpenAI model
-  const handleFunctionCall = async (message) => {
-    try {
-      const fnName = message.name;
-      const handler = functionHandlers[fnName];
-      
-      if (handler) {
-        const args = JSON.parse(message.arguments);
-        console.log(`Calling function ${fnName} with args:`, args);
-        
-        const result = await handler(args);
-        
-        // Send the function result back to the model
-        const event = {
-          type: 'conversation.item.create',
-          item: {
-            type: 'function_call_output',
-            call_id: message.call_id,
-            output: JSON.stringify(result)
-          }
-        };
-        
-        dataChannelRef.current.send(JSON.stringify(event));
-      } else {
-        console.error(`Function ${fnName} not implemented`);
-      }
-    } catch (error) {
-      console.error('Error handling function call:', error);
-    }
+    console.log('Translation session configuration sent');
   };
 
   // Set up WebRTC connection with OpenAI for real-time audio
@@ -223,7 +142,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       dataChannelRef.current = dataChannel;
       
       dataChannel.onopen = () => {
-        setStatus('Connected to OpenAI real-time audio service');
+        setStatus('Connected to translation service');
         console.log("Data channel opened");
         configureDataChannel();
       };
@@ -233,15 +152,36 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
           const data = JSON.parse(event.data);
           console.log("Received data:", data);
           
-          // Handle function calls
-          if (data.type === 'response.function_call_arguments.done') {
-            handleFunctionCall(data);
-            return;
-          }
-          
           // Handle different types of messages from OpenAI
           if (data.type === 'text_delta' && data.text) {
             processedTextRef.current += data.text;
+          } else if (data.type === 'message') {
+            // Handle complete messages that might contain the translation
+            if (data.role === 'assistant' && data.content && data.content.length > 0) {
+              // Find text content in the response
+              const textContent = data.content.find(item => item.type === 'text');
+              if (textContent && textContent.text) {
+                // Extract original text from input if available
+                const originalText = processedTextRef.current || "Unknown input";
+                const translatedText = textContent.text;
+                
+                // Pass both original and translated text to the handler
+                onNewMessage(translatedText, originalText);
+              }
+            }
+          } else if (data.type === 'conversation.item.update' || data.type === 'response.final') {
+            // Check for final response containing the translation
+            if (data.item && data.item.content && data.item.content.length > 0) {
+              const textContent = data.item.content.find(item => item.type === 'text');
+              if (textContent && textContent.text) {
+                // Extract original text from accumulated transcription
+                const originalText = processedTextRef.current || "Unknown input";
+                const translatedText = textContent.text;
+                
+                // Pass both original and translated text to the handler
+                onNewMessage(translatedText, originalText);
+              }
+            }
           }
         } catch (error) {
           console.error("Error handling data channel message:", error);
@@ -250,12 +190,12 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       
       dataChannel.onerror = (error) => {
         console.error("Data channel error:", error);
-        setStatus('Error: Connection problem with interpreter service');
+        setStatus('Error: Connection problem with translation service');
       };
       
       dataChannel.onclose = () => {
         console.log("Data channel closed");
-        setStatus('Interpreter service disconnected');
+        setStatus('Translation service disconnected');
       };
       
       // Create and set local description (offer)
@@ -291,7 +231,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       return true;
     } catch (error) {
       console.error('Error setting up WebRTC connection:', error);
-      setStatus(`Error: Could not connect to interpreter service - ${error.message}`);
+      setStatus(`Error: Could not connect to translation service - ${error.message}`);
       return false;
     }
   };
@@ -306,56 +246,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       console.error("Cannot send message, data channel not open");
       return false;
     }
-  };
-
-  // Send audio text to process
-  const sendTextToProcess = (text, sourceLanguage) => {
-    const targetLanguage = sourceLanguage === 'english' ? 'spanish' : 'english';
-    const sourceLangCode = sourceLanguage === 'english' ? 'en' : 'es';
-    const targetLangCode = sourceLangCode === 'en' ? 'es' : 'en';
-    
-    // Create an event to send to OpenAI
-    const event = {
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: `You are a medical interpreter. Translate the following from ${sourceLanguage} to ${targetLanguage}. Focus on being accurate and natural: "${text}"`
-          },
-        ],
-      },
-    };
-    
-    sendMessage(event);
-    
-    // Additionally use function calling to facilitate the translation
-    // This provides more structured data and helps the model understand the task
-    const functionEvent = {
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: `Please translate this text using the translateText function first to inform me what you're translating, then call providedTranslation with the result.`
-          }
-        ],
-      },
-    };
-    
-    // Send the text to be translated via function call
-    functionHandlers.translateText({
-      text,
-      sourceLanguage: sourceLangCode,
-      targetLanguage: targetLangCode
-    });
-    
-    // Request a response
-    sendMessage({ type: "response.create" });
   };
 
   const startRecording = async () => {
@@ -387,7 +277,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       };
       
       mediaRecorderRef.current.onstart = () => {
-        setStatus('Recording...');
+        setStatus('Recording... Speak in English');
       };
       
       mediaRecorderRef.current.onstop = async () => {
@@ -395,16 +285,10 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setAudioBlob(audioBlob);
         
-        // Close WebRTC connection if using real API
-        if (!MOCK_MODE && peerConnectionRef.current) {
-          // Don't close the connection right away as we need it for translation
-          // peerConnectionRef.current.close();
-        }
-        
         if (MOCK_MODE) {
           // Mock mode - use simulated translation
-          const sourceLanguage = userLanguage;
-          const targetLanguage = userLanguage === 'english' ? 'spanish' : 'english';
+          const sourceLanguage = 'english';
+          const targetLanguage = 'spanish';
           const originalText = userRole === 'doctor' 
             ? "I need to check your symptoms" 
             : "Me duele la cabeza desde hace dos días";
@@ -421,38 +305,8 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
           const audioUrl = URL.createObjectURL(speechAudio);
           const audio = new Audio(audioUrl);
           audio.play();
-        } else {
-          // Real API mode - use the accumulated text
-          let originalText = "Processing...";
-          
-          // Transcribe the audio using the blob
-          try {
-            // Send the audio blob to a server endpoint for transcription
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
-            formData.append('language', userLanguage);
-            
-            const transcriptionResponse = await fetch(`${API_URL}/transcribe`, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            if (transcriptionResponse.ok) {
-              const transcriptionData = await transcriptionResponse.json();
-              originalText = transcriptionData.text;
-              
-              // Use the data channel to get translation
-              sendTextToProcess(originalText, userLanguage);
-              
-              // The UI will be updated when we receive the translation via function call
-              // in the providedTranslation function handler
-              setStatus('Translating...');
-            }
-          } catch (error) {
-            console.error('Error transcribing audio:', error);
-            setStatus('Error: Transcription failed');
-          }
         }
+        // In real mode, the onmessage handler will process the translations
       };
       
       // Get ephemeral key
