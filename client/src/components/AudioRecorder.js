@@ -151,7 +151,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
         throw new Error('Invalid ephemeral key format received from server');
       }
       
-      console.log('Ephemeral key received:', key);
+      // console.log('Ephemeral key received:', key);
       ephemeralKeyRef.current = key;
       return key;
     } catch (error) {
@@ -199,7 +199,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     };
     
     dataChannelRef.current.send(JSON.stringify(event));
-    console.log('Translation session configuration sent');
+    // console.log('Translation session configuration sent');
   };
 
   // Set up WebRTC connection with OpenAI for real-time audio
@@ -224,7 +224,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       // Set up to play remote audio from the model
       peerConnection.ontrack = (e) => {
         audioElementRef.current.srcObject = e.streams[0];
-        console.log("Received audio track from OpenAI");
+        // console.log("Received audio track from OpenAI");
       };
       
       // Get audio stream for microphone input
@@ -248,18 +248,18 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       dataChannel.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("Received data:", data);
+          // console.log("Received data:", data);
           
           // Process transcription from the user's audio
           if (data.type === 'audio_transcript' && data.text) {
             processedTextRef.current = data.text;
-            console.log("Transcribed original text:", data.text);
+            // console.log("Transcribed original text:", data.text);
           }
           
           // Capture original transcripts (from user speech)
           if (data.type === 'conversation.item.input_audio_transcription.completed' && data.transcript) {
             processedTextRef.current = data.transcript.trim();
-            console.log("Original speech transcript:", processedTextRef.current);
+            // console.log("Original speech transcript:", processedTextRef.current);
             
             // If we already have a translation, send the complete message
             if (translationResultRef.current.translatedText) {
@@ -277,7 +277,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
           // Capture translated transcripts (from assistant)
           if (data.type === 'response.audio_transcript.done' && data.transcript) {
             translationResultRef.current.translatedText = data.transcript.trim();
-            console.log("Translation received:", translationResultRef.current.translatedText);
+            // console.log("Translation received:", translationResultRef.current.translatedText);
             
             // If we already have the original text, send the complete message
             if (processedTextRef.current) {
@@ -405,7 +405,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)(audioContextOptions);
       
       // Log the actual sample rate for debugging
-      console.log('Audio context sample rate:', audioContextRef.current.sampleRate);
+      // console.log('Audio context sample rate:', audioContextRef.current.sampleRate);
       
       mediaRecorderRef.current = new MediaRecorder(stream, {
         mimeType: 'audio/webm',
@@ -512,11 +512,11 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       >
         {isRecording ? 'Stop Recording' : 'Start Recording'}
       </button>
-      {audioBlob && (
+      {/* {audioBlob && (
         <div className="audio-preview">
           <audio controls src={URL.createObjectURL(audioBlob)}></audio>
         </div>        
-      )}
+      )} */}
     </div>
   );
 };

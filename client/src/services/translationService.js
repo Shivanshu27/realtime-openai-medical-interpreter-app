@@ -3,7 +3,7 @@
 
 const MOCK_MODE = process.env.REACT_APP_MOCK_MODE === 'true';
 console.log('Translation Service MOCK_MODE:', MOCK_MODE);
-console.log('API URL:', process.env.REACT_APP_API_URL);
+// console.log('API URL:', process.env.REACT_APP_API_URL);
 
 // Repeat phrase detection
 const isRepeatPhrase = (text) => {

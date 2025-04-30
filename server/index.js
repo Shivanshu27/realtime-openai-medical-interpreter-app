@@ -6,6 +6,13 @@ require('dotenv').config();
 
 const app = express();
 
+// Add multer for file uploads
+// const multer = require('multer');
+// const upload = multer({ storage: multer.memoryStorage() });
+// const fs = require('fs');
+// const path = require('path');
+// const os = require('os');
+
 // Configuration
 const MOCK_MODE = process.env.MOCK_MODE === 'true'; // Default to real API if not specified
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -88,6 +95,22 @@ app.post('/generate-ephemeral-key', async (req, res) => {
   }
 });
 
+// Store conversation in database
+app.post('/conversations', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    const result = await db.collection('conversations').insertOne({
+      messages,
+      timestamp: new Date()
+    });
+    res.status(201).json({ id: result.insertedId });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+
 // Translation endpoint
 app.post('/translate', async (req, res) => {
   try {
@@ -151,94 +174,75 @@ app.post('/translate', async (req, res) => {
   }
 });
 
-// Store conversation in database
-app.post('/conversations', async (req, res) => {
-  try {
-    const { messages } = req.body;
-    const result = await db.collection('conversations').insertOne({
-      messages,
-      timestamp: new Date()
-    });
-    res.status(201).json({ id: result.insertedId });
-  } catch (error) {
-    console.error('Error saving conversation:', error);
-    res.status(500).json({ error: 'Failed to save conversation' });
-  }
-});
 
-// Add multer for file uploads
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+// 
 
 // Transcription endpoint - updated to use the current API
-app.post('/transcribe', upload.single('audio'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No audio file provided' });
-    }
+// app.post('/transcribe', upload.single('audio'), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ error: 'No audio file provided' });
+//     }
     
-    if (MOCK_MODE) {
-      // Mock transcription
-      const language = req.body.language || 'english';
-      const mockTranscriptions = {
-        english: "I need to check your symptoms",
-        spanish: "Me duele la cabeza desde hace dos días"
-      };
+//     if (MOCK_MODE) {
+//       // Mock transcription
+//       const language = req.body.language || 'english';
+//       const mockTranscriptions = {
+//         english: "I need to check your symptoms",
+//         spanish: "Me duele la cabeza desde hace dos días"
+//       };
       
-      return res.json({ text: mockTranscriptions[language] });
-    }
+//       return res.json({ text: mockTranscriptions[language] });
+//     }
     
-    // Save the file temporarily
-    const tempFilePath = path.join(os.tmpdir(), `transcribe_${Date.now()}.webm`);
-    fs.writeFileSync(tempFilePath, req.file.buffer);
+//     // Save the file temporarily
+//     const tempFilePath = path.join(os.tmpdir(), `transcribe_${Date.now()}.webm`);
+//     fs.writeFileSync(tempFilePath, req.file.buffer);
     
-    // Language parameter
-    const language = req.body.language || 'english';
+//     // Language parameter
+//     const language = req.body.language || 'english';
     
-    try {
-      // Call OpenAI's transcription API - updated to use current model and parameters
-      const formData = new FormData();
-      formData.append('file', fs.createReadStream(tempFilePath));
-      formData.append('model', 'gpt-4o-transcribe'); // Updated to new model
-      formData.append('response_format', 'text');
+//     try {
+//       // Call OpenAI's transcription API - updated to use current model and parameters
+//       const formData = new FormData();
+//       formData.append('file', fs.createReadStream(tempFilePath));
+//       formData.append('model', 'gpt-4o-transcribe'); // Updated to new model
+//       formData.append('response_format', 'text');
       
-      // Add language-specific prompt
-      if (language === 'english') {
-        formData.append('prompt', 'This is a medical conversation in English.');
-      } else if (language === 'spanish') {
-        formData.append('prompt', 'Esta es una conversación médica en español.');
-      }
+//       // Add language-specific prompt
+//       if (language === 'english') {
+//         formData.append('prompt', 'This is a medical conversation in English.');
+//       } else if (language === 'spanish') {
+//         formData.append('prompt', 'Esta es una conversación médica en español.');
+//       }
       
-      const response = await axios.post(
-        'https://api.openai.com/v1/audio/transcriptions',
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'multipart/form-data',
-          }
-        }
-      );
+//       const response = await axios.post(
+//         'https://api.openai.com/v1/audio/transcriptions',
+//         formData,
+//         {
+//           headers: {
+//             'Authorization': `Bearer ${OPENAI_API_KEY}`,
+//             'Content-Type': 'multipart/form-data',
+//           }
+//         }
+//       );
       
-      // Clean up temp file
-      fs.unlinkSync(tempFilePath);
+//       // Clean up temp file
+//       fs.unlinkSync(tempFilePath);
       
-      res.json({ text: response.data });  // Updated to match new response format
-    } catch (error) {
-      // Clean up temp file in case of error
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath);
-      }
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error transcribing audio:', error);
-    res.status(500).json({ error: 'Failed to transcribe audio', details: error.message });
-  }
-});
+//       res.json({ text: response.data });  // Updated to match new response format
+//     } catch (error) {
+//       // Clean up temp file in case of error
+//       if (fs.existsSync(tempFilePath)) {
+//         fs.unlinkSync(tempFilePath);
+//       }
+//       throw error;
+//     }
+//   } catch (error) {
+//     console.error('Error transcribing audio:', error);
+//     res.status(500).json({ error: 'Failed to transcribe audio', details: error.message });
+//   }
+// });
 
 // Start the server
 const PORT = process.env.PORT || 5000;
