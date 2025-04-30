@@ -23,17 +23,34 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     translatedText: ''
   });
   
+  // Watch for userRole changes and reconfigure the data channel if needed
+  useEffect(() => {
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      configureDataChannel();
+    }
+  }, [userRole, userLanguage]);
+  
   // Clean up resources when component unmounts
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
       }
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-      }
+      closeConnection();
     };
   }, []);
+
+  // Close the WebRTC connection
+  const closeConnection = () => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
+    }
+  };
 
   // Request an ephemeral key from the server
   const getEphemeralKey = async () => {
@@ -67,22 +84,26 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     }
   };
 
-  // Configure the data channel with function definitions and strict translation instructions
+  // Configure the data channel with function definitions and translation instructions based on user role
   const configureDataChannel = () => {
     if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
       console.error("Data channel not ready for configuration");
       return;
     }
 
-    console.log('Configuring data channel with strict translation instructions');
+    // Determine source and target languages based on user role
+    const sourceLanguage = userRole === 'doctor' ? 'English' : 'Spanish';
+    const targetLanguage = userRole === 'doctor' ? 'Spanish' : 'English';
+    
+    console.log(`Configuring data channel for ${sourceLanguage} to ${targetLanguage} translation`);
     
     const event = {
       type: 'session.update',
       event_id: crypto.randomUUID(),
       session: {
         modalities: ['text', 'audio'],
-        instructions: "You are a PURE TRANSLATOR. Your sole purpose is to translate the user's speech from English to Spanish, nothing more. DO NOT respond to questions or engage in conversation. DO NOT provide any additional information. Your response should ONLY consist of the Spanish translation of what the user said. Follow medical terminology accurately if present.",
-        voice: "alloy", // Using a voice that works well for Spanish
+        instructions: `You are a PURE TRANSLATOR. Your sole purpose is to translate the user's speech from ${sourceLanguage} to ${targetLanguage}, nothing more. DO NOT respond to questions or engage in conversation. DO NOT provide any additional information. Your response should ONLY consist of the ${targetLanguage} translation of what the user said. Follow medical terminology accurately if present.`,
+        voice: userRole === 'doctor' ? 'alloy' : 'coral', // Use alloy for Spanish, nova for English
         input_audio_format: "pcm16",
         output_audio_format: "pcm16",
         input_audio_transcription: {
@@ -152,21 +173,32 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
           const data = JSON.parse(event.data);
           console.log("Received data:", data);
           
+          // Process transcription from the user's audio
+          if (data.type === 'audio_transcript' && data.text) {
+            processedTextRef.current = data.text;
+            console.log("Transcribed original text:", data.text);
+          }
+          
           // Handle different types of messages from OpenAI
           if (data.type === 'text_delta' && data.text) {
-            processedTextRef.current += data.text;
+            translationResultRef.current.translatedText += data.text;
           } else if (data.type === 'message') {
             // Handle complete messages that might contain the translation
             if (data.role === 'assistant' && data.content && data.content.length > 0) {
               // Find text content in the response
               const textContent = data.content.find(item => item.type === 'text');
               if (textContent && textContent.text) {
-                // Extract original text from input if available
+                // Use the transcribed original text if available
                 const originalText = processedTextRef.current || "Unknown input";
                 const translatedText = textContent.text;
                 
                 // Pass both original and translated text to the handler
                 onNewMessage(translatedText, originalText);
+                
+                // Reset for next translation
+                processedTextRef.current = '';
+                translationResultRef.current.translatedText = '';
+                translationResultRef.current.originalText = '';
               }
             }
           } else if (data.type === 'conversation.item.update' || data.type === 'response.final') {
@@ -174,7 +206,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
             if (data.item && data.item.content && data.item.content.length > 0) {
               const textContent = data.item.content.find(item => item.type === 'text');
               if (textContent && textContent.text) {
-                // Extract original text from accumulated transcription
+                // Use the transcribed original text if available
                 const originalText = processedTextRef.current || "Unknown input";
                 const translatedText = textContent.text;
                 
@@ -269,6 +301,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       
       audioChunksRef.current = [];
       processedTextRef.current = ''; // Reset processed text
+      translationResultRef.current = { originalText: '', translatedText: '' }; // Reset translation results
       
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -277,7 +310,8 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       };
       
       mediaRecorderRef.current.onstart = () => {
-        setStatus('Recording... Speak in English');
+        const sourceLanguage = userRole === 'doctor' ? 'English' : 'Spanish';
+        setStatus(`Recording... Speak in ${sourceLanguage}`);
       };
       
       mediaRecorderRef.current.onstop = async () => {
@@ -287,11 +321,16 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
         
         if (MOCK_MODE) {
           // Mock mode - use simulated translation
-          const sourceLanguage = 'english';
-          const targetLanguage = 'spanish';
-          const originalText = userRole === 'doctor' 
-            ? "I need to check your symptoms" 
-            : "Me duele la cabeza desde hace dos días";
+          const sourceLanguage = userRole === 'doctor' ? 'english' : 'spanish';
+          const targetLanguage = userRole === 'doctor' ? 'spanish' : 'english';
+          
+          // Example mock texts based on role
+          let originalText;
+          if (userRole === 'doctor') {
+            originalText = "I need to check your symptoms. How long have you been feeling this way?";
+          } else {
+            originalText = "Me duele la cabeza desde hace dos días y tengo fiebre alta.";
+          }
           
           const { translatedText, speechAudio } = await translateAndSpeak(
             originalText, 
@@ -330,6 +369,12 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      
+      // Stop sending audio to OpenAI by closing the connection
+      if (!MOCK_MODE) {
+        closeConnection();
+        setStatus('Recording stopped. Connection closed.');
+      }
     }
   };
 

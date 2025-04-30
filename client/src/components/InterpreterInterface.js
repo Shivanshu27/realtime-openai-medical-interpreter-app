@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { addMessage } from '../redux/messagesSlice';
+import { setUserRole } from '../redux/userSlice';
 import AudioRecorder from './AudioRecorder';
 import MessageList from './MessageList';
 
@@ -28,6 +29,13 @@ const InterpreterInterface = ({ showConversationOnly = false }) => {
     dispatch(addMessage(newMessage));
   };
 
+  // Toggle role handler
+  const toggleUserRole = () => {
+    const newRole = userRole === 'doctor' ? 'patient' : 'doctor';
+    dispatch(setUserRole(newRole));
+    setStatus(`Role changed to ${newRole === 'doctor' ? 'Doctor (English)' : 'Patient (Spanish)'}`);
+  };
+
   if (showConversationOnly) {
     return (
       <div className="conversation-container">
@@ -39,9 +47,17 @@ const InterpreterInterface = ({ showConversationOnly = false }) => {
 
   return (
     <div className="interpreter-interface">
-      <h2>
-        {userRole === 'doctor' ? 'Doctor (English)' : 'Patient (Spanish)'} View
-      </h2>
+      <div className="role-header">
+        <h2>
+          {userRole === 'doctor' ? 'Doctor (English → Spanish)' : 'Patient (Spanish → English)'}
+        </h2>
+        <button 
+          className="toggle-role-btn"
+          onClick={toggleUserRole}
+        >
+          Switch to {userRole === 'doctor' ? 'Patient' : 'Doctor'} Role
+        </button>
+      </div>
       
       <div className="conversation-container">
         <MessageList messages={messages} userRole={userRole} />
