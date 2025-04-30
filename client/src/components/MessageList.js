@@ -11,12 +11,13 @@ const MessageList = ({ messages, userRole }) => {
         messages.map((message, index) => (
           <div 
             key={index} 
-            className={`message ${message.sender}`}
+            className={`message ${message.sender} ${message.isRepetition ? 'repeated' : ''}`}
           >
             <div className="message-header">
               <strong>{message.sender === 'doctor' ? 'Doctor' : 'Patient'}</strong>
               <span className="timestamp">
                 {new Date(message.timestamp).toLocaleTimeString()}
+                {message.isRepetition && <span className="repetition-tag"> (Repeated)</span>}
               </span>
             </div>
             <div className="message-body">

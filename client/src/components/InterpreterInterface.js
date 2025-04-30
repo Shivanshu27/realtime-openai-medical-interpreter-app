@@ -19,12 +19,13 @@ const InterpreterInterface = ({ showConversationOnly = false }) => {
   }, [messages]);
 
   // Handle new message from audio recording
-  const handleNewMessage = (text, originalText) => {
+  const handleNewMessage = (text, originalText, isRepetition = false) => {
     const newMessage = {
       sender: userRole,
       text,
       originalText: originalText || text,
       timestamp: new Date().toISOString(),
+      isRepetition: isRepetition
     };
     dispatch(addMessage(newMessage));
   };

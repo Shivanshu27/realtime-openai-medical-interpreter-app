@@ -1,9 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { translateAndSpeak } from '../services/translationService';
+import { useSelector } from 'react-redux';
 
 const MOCK_MODE = process.env.REACT_APP_MOCK_MODE === 'true';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 const OPENAI_API_URL = process.env.REACT_APP_OPENAI_API_URL || 'https://api.openai.com/v1/realtime';
+
+// Add phrases for "repeat that" in both languages
+const REPEAT_PHRASES = {
+  english: ['repeat that', 'say that again', 'could you repeat', 'what did you say'],
+  spanish: ['repite eso', 'repita eso', 'puedes repetir', 'qué dijiste', 'que dijo', 'otra vez', 'repítelo']
+};
 
 const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
   const [isRecording, setIsRecording] = useState(false);
@@ -23,6 +30,9 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     translatedText: ''
   });
   
+  // Get all messages from Redux store to find previous doctor's message
+  const messages = useSelector((state) => state.messages);
+  
   // Watch for userRole changes and reconfigure the data channel if needed
   useEffect(() => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
@@ -39,6 +49,73 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       closeConnection();
     };
   }, []);
+
+  // Check if text contains a repeat phrase
+  const isRepeatPhrase = (text) => {
+    if (!text) return false;
+    const lowerText = text.toLowerCase();
+    
+    // Check against phrases in the user's language
+    const phrasesToCheck = userLanguage === 'english' ? 
+      REPEAT_PHRASES.english : REPEAT_PHRASES.spanish;
+      
+    return phrasesToCheck.some(phrase => lowerText.includes(phrase));
+  };
+  
+  // Find the doctor's previous message to repeat
+  const findPreviousDoctorMessage = () => {
+    // Filter for doctor messages
+    const doctorMessages = messages.filter(msg => msg.sender === 'doctor');
+    
+    // Get the last doctor message if any exists
+    if (doctorMessages.length > 0) {
+      return doctorMessages[doctorMessages.length - 1];
+    }
+    
+    return null;
+  };
+  
+  // Handle repeat request
+  const handleRepeatRequest = async (originalText) => {
+    // Find previous doctor message
+    const previousDoctorMessage = findPreviousDoctorMessage();
+    
+    if (previousDoctorMessage) {
+      // Create a new message indicating repetition
+      const repetitionMessage = {
+        sender: 'doctor', // Always from doctor since we're repeating doctor's message
+        text: previousDoctorMessage.text,
+        originalText: `[Repetition requested: ${originalText}]`,
+        timestamp: new Date().toISOString(),
+        isRepetition: true
+      };
+      
+      // Send the repetition message
+      onNewMessage(repetitionMessage.text, repetitionMessage.originalText, true);
+      
+      // If in mock mode, play the audio
+      if (MOCK_MODE) {
+        const sourceLanguage = 'english'; // Doctor speaks English
+        const targetLanguage = 'spanish'; // Target is Spanish for patient
+        
+        // Use translation service to generate speech
+        const { speechAudio } = await translateAndSpeak(
+          previousDoctorMessage.text,
+          sourceLanguage,
+          targetLanguage
+        );
+        
+        // Play the translated audio
+        const audioUrl = URL.createObjectURL(speechAudio);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      }
+      
+      return true;
+    }
+    
+    return false;
+  };
 
   // Close the WebRTC connection
   const closeConnection = () => {
@@ -365,6 +442,17 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
             originalText = "I need to check your symptoms. How long have you been feeling this way?";
           } else {
             originalText = "Me duele la cabeza desde hace dos días y tengo fiebre alta.";
+            
+            // For patient role in mock mode, sometimes simulate "repeat that" phrases
+            if (Math.random() < 0.3) {  // 30% chance to simulate repeat request
+              originalText = userLanguage === 'english' ? "Could you repeat that please?" : "¿Puede repetir eso por favor?";
+              
+              // Handle the repeat request
+              const wasRepeated = await handleRepeatRequest(originalText);
+              if (wasRepeated) {
+                return; // Don't proceed with normal translation
+              }
+            }
           }
           
           const { translatedText, speechAudio } = await translateAndSpeak(
@@ -380,7 +468,10 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
           const audio = new Audio(audioUrl);
           audio.play();
         }
-        // In real mode, the onmessage handler will process the translations
+        // For non-mock mode with real API calls
+        else {
+          // We'll handle potential "repeat that" phrases in the data channel message handler
+        }
       };
       
       // Get ephemeral key
@@ -424,7 +515,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       {audioBlob && (
         <div className="audio-preview">
           <audio controls src={URL.createObjectURL(audioBlob)}></audio>
-        </div>
+        </div>        
       )}
     </div>
   );

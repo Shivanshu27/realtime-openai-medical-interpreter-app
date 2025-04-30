@@ -228,6 +228,32 @@ button.active {
   border-left: 4px solid #27ae60;
 }
 
+/* Style for repeated messages */
+.message.repeated {
+  border-left-style: dashed;
+  background-color: rgba(214, 234, 248, 0.7); /* lighter blue */
+}
+
+.repetition-tag {
+  font-style: italic;
+  background-color: #f8d775;
+  color: #333;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-left: 5px;
+}
+
+/* Special instructions message */
+.special-instruction {
+  margin: 10px 0;
+  padding: 8px 15px;
+  background-color: #f5f5dc;
+  border-left: 4px solid #f39c12;
+  border-radius: 4px;
+  font-style: italic;
+}
+
 .message-header {
   display: flex;
   justify-content: space-between;

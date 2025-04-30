@@ -5,6 +5,10 @@ import { toggleSummaryView } from '../redux/summarySlice';
 const SummaryPanel = () => {
   const dispatch = useDispatch();
   const summary = useSelector((state) => state.summary);
+  const messages = useSelector((state) => state.messages);
+  
+  // Count repetition requests
+  const repetitionCount = messages.filter(msg => msg.isRepetition).length;
   
   const handleBackToConversation = () => {
     dispatch(toggleSummaryView(false));
@@ -64,6 +68,14 @@ const SummaryPanel = () => {
             <span className="action-icon">{summary.actions.labOrder ? '✅' : '❌'}</span>
             <span className="action-text">Lab Order</span>
           </div>
+          
+          {/* Add repetition statistics if any occurred */}
+          {repetitionCount > 0 && (
+            <div className="action-item detected">
+              <span className="action-icon">🔄</span>
+              <span className="action-text">Repetition Requests: {repetitionCount}</span>
+            </div>
+          )}
         </div>
       )}
       

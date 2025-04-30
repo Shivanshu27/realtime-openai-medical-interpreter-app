@@ -5,6 +5,21 @@ const MOCK_MODE = process.env.REACT_APP_MOCK_MODE === 'true';
 console.log('Translation Service MOCK_MODE:', MOCK_MODE);
 console.log('API URL:', process.env.REACT_APP_API_URL);
 
+// Repeat phrase detection
+const isRepeatPhrase = (text) => {
+  const repeatPhrases = {
+    english: ['repeat that', 'say that again', 'could you repeat', 'what did you say'],
+    spanish: ['repite eso', 'repita eso', 'puedes repetir', 'qué dijiste', 'que dijo', 'otra vez', 'repítelo']
+  };
+  
+  if (!text) return false;
+  const lowerText = text.toLowerCase();
+  
+  // Check both languages for maximum compatibility
+  return repeatPhrases.english.some(phrase => lowerText.includes(phrase)) ||
+         repeatPhrases.spanish.some(phrase => lowerText.includes(phrase));
+};
+
 // Mock translation function
 const simulateTranslation = (text, sourceLanguage, targetLanguage) => {
   // Simulated translations for demo purposes
@@ -14,6 +29,13 @@ const simulateTranslation = (text, sourceLanguage, targetLanguage) => {
         "I need to check your symptoms": "Necesito revisar tus síntomas",
         "How long have you had this pain?": "¿Por cuánto tiempo ha tenido este dolor?",
         "I'm going to prescribe some medication": "Voy a recetarle algunos medicamentos",
+        // discuss follow up appointment
+        "We should schedule a follow-up appointment": "Deberíamos programar una cita de seguimiento",
+        // Adding repetition phrases
+        "Could you repeat that please?": "¿Podría repetir eso por favor?",
+        "Say that again": "Diga eso nuevamente",
+        "What did you say?": "¿Qué dijo?",
+        "I didn't understand": "No entendí"
       }
     },
     spanish: {
@@ -21,6 +43,15 @@ const simulateTranslation = (text, sourceLanguage, targetLanguage) => {
         "Me duele la cabeza desde hace dos días": "I've had a headache for two days",
         "Tengo fiebre y dolor de garganta": "I have a fever and sore throat",
         "No puedo dormir por el dolor": "I can't sleep because of the pain",
+        // discuss lab order
+        "Necesito que te hagas un análisis de sangre": "I need you to get a blood test",
+        "Vamos a hacer una radiografía": "We are going to do an X-ray",
+        // Adding repetition phrases
+        "¿Puede repetir eso por favor?": "Could you repeat that please?",
+        "No entendí": "I didn't understand",
+        "¿Qué dijo?": "What did you say?",
+        "Otra vez por favor": "Again please",
+        "Repítelo": "Repeat that"
       }
     }
   };
@@ -130,3 +161,6 @@ export const translateAndSpeak = async (text, sourceLanguage, targetLanguage) =>
     };
   }
 };
+
+// Export the helper function for checking repeat phrases
+export const detectRepeatPhrase = isRepeatPhrase;

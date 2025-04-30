@@ -18,6 +18,7 @@ export const analyzeConversation = (messages) => {
   // Extract basic conversation stats
   const doctorMessages = messages.filter(msg => msg.sender === 'doctor').length;
   const patientMessages = messages.filter(msg => msg.sender === 'patient').length;
+  const repetitionRequests = messages.filter(msg => msg.isRepetition).length;
   
   // Detect actions based on keywords in the conversation
   const followUpAppointment = detectFollowUpAppointment(fullText);
@@ -26,7 +27,8 @@ export const analyzeConversation = (messages) => {
   // Generate a summary of the conversation
   const summary = generateSummary(messages, { 
     doctorMessages, 
-    patientMessages, 
+    patientMessages,
+    repetitionRequests,
     followUpAppointment, 
     labOrder 
   });
@@ -82,7 +84,14 @@ function generateSummary(messages, stats) {
   // Add basic statistics
   summary += `Total exchanges: ${messages.length}\n`;
   summary += `Doctor messages: ${stats.doctorMessages}\n`;
-  summary += `Patient messages: ${stats.patientMessages}\n\n`;
+  summary += `Patient messages: ${stats.patientMessages}\n`;
+  
+  // Add repetition statistics if any occurred
+  if (stats.repetitionRequests > 0) {
+    summary += `Number of repetition requests: ${stats.repetitionRequests}\n`;
+  }
+  
+  summary += '\n';
   
   // Add detected actions
   summary += '## Actions Detected\n\n';
@@ -116,7 +125,7 @@ function generateSummary(messages, stats) {
         const idx = middleStart + Math.floor((middleEnd - middleStart) * (i / 2));
         if (idx > 0 && idx < messages.length - 1) {
           const msg = messages[idx];
-          summary += `- ${msg.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${msg.text}"\n`;
+          summary += `- ${msg.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${msg.text}"${msg.isRepetition ? ' (repeated)' : ''}\n`;
         }
       }
     }
@@ -124,14 +133,14 @@ function generateSummary(messages, stats) {
     // Add last exchange if there's more than one message
     if (messages.length > 1) {
       const last = messages[messages.length - 1];
-      summary += `- Final exchange: ${last.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${last.text}"\n`;
+      summary += `- Final exchange: ${last.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${last.text}"${last.isRepetition ? ' (repeated)' : ''}\n`;
     }
   }
   
   // Add full transcript reference
   summary += '\n## Full Transcript\n\n';
   messages.forEach((msg, index) => {
-    summary += `${msg.sender === 'doctor' ? 'Doctor' : 'Patient'} (${new Date(msg.timestamp).toLocaleTimeString()}): ${msg.text}\n`;
+    summary += `${msg.sender === 'doctor' ? 'Doctor' : 'Patient'} (${new Date(msg.timestamp).toLocaleTimeString()})${msg.isRepetition ? ' [REPEATED]' : ''}: ${msg.text}\n`;
     if (msg.originalText && msg.originalText !== msg.text) {
       summary += `  Original: ${msg.originalText}\n`;
     }
