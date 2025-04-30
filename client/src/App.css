@@ -36,6 +36,106 @@
   flex: 3;
 }
 
+/* Left panel divider */
+.left-panel-divider {
+  height: 1px;
+  background-color: #ddd;
+  margin: 1.5rem 0;
+}
+
+/* End conversation button */
+.end-conversation-btn {
+  background-color: #e74c3c;
+  color: white;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.end-conversation-btn:hover {
+  background-color: #c0392b;
+}
+
+/* Summary panel styles */
+.summary-panel {
+  background-color: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.download-btn {
+  background-color: #3498db;
+}
+
+.back-btn {
+  background-color: #7f8c8d;
+}
+
+.detected-actions {
+  background-color: #f5f5f5;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.action-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.action-item.detected {
+  background-color: #d5f5e3;
+}
+
+.action-item.not-detected {
+  background-color: #fadbd8;
+  color: #777;
+}
+
+.action-icon {
+  margin-right: 0.5rem;
+  font-size: 1.2rem;
+}
+
+.summary-content {
+  line-height: 1.6;
+}
+
+.summary-content h2 {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: #2c3e50;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+.summary-content h3 {
+  margin-top: 1.2rem;
+  margin-bottom: 0.8rem;
+  color: #34495e;
+}
+
+.summary-content li {
+  margin-bottom: 0.5rem;
+}
+
 /* Button styling */
 button {
   background-color: #2980b9;
