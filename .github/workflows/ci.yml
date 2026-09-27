@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: server (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["18", "20"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: server/package.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci || npm install
+
+      - name: Run server tests
+        working-directory: server
+        run: npm test
+
+  client:
+    name: client (node 20)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: client/package.json
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci || npm install
+
+      - name: Run client tests
+        working-directory: client
+        run: npm test -- --watchAll=false
+
+      - name: Build client
+        working-directory: client
+        run: npm run build
+        env:
+          CI: false
+
+  docker:
+    name: docker image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: medical-interpreter:ci
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject committed secrets or env files
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -v '\.example' | grep -Ei '^\.env$|\.pem$|\.key$|id_rsa'; then
+            echo "::error::Sensitive credential file tracked in git repository!"
+            exit 1
+          fi
+          echo "No sensitive credentials tracked."

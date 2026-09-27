@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { translateAndSpeak } from '../services/translationService';
 import { useSelector } from 'react-redux';
+import AudioVisualizer from './AudioVisualizer';
 
 const MOCK_MODE = process.env.REACT_APP_MOCK_MODE === 'true';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 const OPENAI_API_URL = process.env.REACT_APP_OPENAI_API_URL || 'https://api.openai.com/v1/realtime';
 
 // Add phrases for "repeat that" in both languages
@@ -14,17 +15,14 @@ const REPEAT_PHRASES = {
 
 const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const peerConnectionRef = useRef(null);
   const dataChannelRef = useRef(null);
   const ephemeralKeyRef = useRef(null);
   const audioContextRef = useRef(null);
-  const audioPlayerRef = useRef(null);
   const audioElementRef = useRef(null);
   const processedTextRef = useRef('');
-  const functionCallsRef = useRef({});
   const translationResultRef = useRef({
     originalText: '',
     translatedText: ''
@@ -38,6 +36,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
       configureDataChannel();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole, userLanguage]);
   
   // Clean up resources when component unmounts
@@ -51,6 +50,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
   }, []);
 
   // Check if text contains a repeat phrase
+  // eslint-disable-next-line no-unused-vars
   const isRepeatPhrase = (text) => {
     if (!text) return false;
     const lowerText = text.toLowerCase();
@@ -151,7 +151,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
         throw new Error('Invalid ephemeral key format received from server');
       }
       
-      // console.log('Ephemeral key received:', key);
       ephemeralKeyRef.current = key;
       return key;
     } catch (error) {
@@ -199,7 +198,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
     };
     
     dataChannelRef.current.send(JSON.stringify(event));
-    // console.log('Translation session configuration sent');
   };
 
   // Set up WebRTC connection with OpenAI for real-time audio
@@ -224,7 +222,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       // Set up to play remote audio from the model
       peerConnection.ontrack = (e) => {
         audioElementRef.current.srcObject = e.streams[0];
-        // console.log("Received audio track from OpenAI");
       };
       
       // Get audio stream for microphone input
@@ -248,18 +245,15 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       dataChannel.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          // console.log("Received data:", data);
           
           // Process transcription from the user's audio
           if (data.type === 'audio_transcript' && data.text) {
             processedTextRef.current = data.text;
-            // console.log("Transcribed original text:", data.text);
           }
           
           // Capture original transcripts (from user speech)
           if (data.type === 'conversation.item.input_audio_transcription.completed' && data.transcript) {
             processedTextRef.current = data.transcript.trim();
-            // console.log("Original speech transcript:", processedTextRef.current);
             
             // If we already have a translation, send the complete message
             if (translationResultRef.current.translatedText) {
@@ -277,7 +271,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
           // Capture translated transcripts (from assistant)
           if (data.type === 'response.audio_transcript.done' && data.transcript) {
             translationResultRef.current.translatedText = data.transcript.trim();
-            // console.log("Translation received:", translationResultRef.current.translatedText);
             
             // If we already have the original text, send the complete message
             if (processedTextRef.current) {
@@ -381,6 +374,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
   };
 
   // Send a message through the data channel
+  // eslint-disable-next-line no-unused-vars
   const sendMessage = (message) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
       message.event_id = message.event_id || crypto.randomUUID();
@@ -404,9 +398,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)(audioContextOptions);
       
-      // Log the actual sample rate for debugging
-      // console.log('Audio context sample rate:', audioContextRef.current.sampleRate);
-      
       mediaRecorderRef.current = new MediaRecorder(stream, {
         mimeType: 'audio/webm',
       });
@@ -428,8 +419,6 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
       
       mediaRecorderRef.current.onstop = async () => {
         setStatus('Processing audio...');
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(audioBlob);
         
         if (MOCK_MODE) {
           // Mock mode - use simulated translation
@@ -506,17 +495,14 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
 
   return (
     <div className="audio-recorder">
+      <AudioVisualizer isRecording={isRecording} status={isRecording ? 'Listening & Transcribing...' : 'Microphone Ready'} />
       <button 
         onClick={isRecording ? stopRecording : startRecording}
         className={`record-btn ${isRecording ? 'recording' : ''}`}
       >
+        <span className="rec-dot"></span>
         {isRecording ? 'Stop Recording' : 'Start Recording'}
       </button>
-      {/* {audioBlob && (
-        <div className="audio-preview">
-          <audio controls src={URL.createObjectURL(audioBlob)}></audio>
-        </div>        
-      )} */}
     </div>
   );
 };

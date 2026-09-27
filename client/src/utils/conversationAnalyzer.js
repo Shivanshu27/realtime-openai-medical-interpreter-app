@@ -1,151 +1,171 @@
 /**
- * Analyzes conversation messages to detect specific actions and generate a summary
+ * Clinical Conversation Analyzer
+ * Performs rule-based clinical entity extraction on consultation transcripts.
+ * Detects follow-up appointments, laboratory tests, diagnostic imaging, and medications.
  */
-export const analyzeConversation = (messages) => {
+
+const FOLLOW_UP_KEYWORDS = [
+  'follow-up', 'follow up', 'appointment', 'schedule', 'come back', 
+  'see you', 'next visit', 'next week', 'next month', 'two weeks', 'three weeks',
+  'return visit', 'check again', 'come again', 'consultation',
+  'cita', 'programar', 'próxima visita', 'siguiente cita',
+  'volver', 'regresar', 'revisión', 'consulta'
+];
+
+const LAB_KEYWORDS = [
+  'lab', 'test', 'blood', 'specimen', 'sample', 'panel',
+  'analysis', 'urine', 'kidney function', 'liver', 'cbc',
+  'laboratorio', 'examen', 'sangre', 'muestra', 'análisis',
+  'orina', 'función renal'
+];
+
+const IMAGING_KEYWORDS = [
+  'x-ray', 'radiografía', 'rayos x', 'scan', 'ct scan', 'tomografía',
+  'mri', 'resonancia', 'ultrasound', 'ecografía', 'imaging'
+];
+
+const MEDICATION_KEYWORDS = [
+  'prescribe', 'prescription', 'medication', 'medicine', 'pills', 'tablets',
+  'dosage', 'daily', 'mg', 'twice daily', 'with food', 'antibiotic', 'lisinopril',
+  'recetar', 'receta', 'medicamento', 'medicina', 'pastilla', 'pastillas',
+  'dosis', 'diario', 'dos veces al día', 'con comida', 'en ayunas'
+];
+
+export const detectFollowUpAppointment = (text = '') => {
+  const lower = text.toLowerCase();
+  return FOLLOW_UP_KEYWORDS.some(kw => lower.includes(kw));
+};
+
+export const detectLabOrder = (text = '') => {
+  const lower = text.toLowerCase();
+  return LAB_KEYWORDS.some(kw => lower.includes(kw));
+};
+
+export const detectImagingOrder = (text = '') => {
+  const lower = text.toLowerCase();
+  return IMAGING_KEYWORDS.some(kw => lower.includes(kw));
+};
+
+export const detectMedicationDiscussion = (text = '') => {
+  const lower = text.toLowerCase();
+  return MEDICATION_KEYWORDS.some(kw => lower.includes(kw));
+};
+
+/**
+ * Analyzes conversation messages to detect clinical actions and generate a structured brief.
+ */
+export const analyzeConversation = (messages = []) => {
   if (!messages || messages.length === 0) {
     return {
-      content: "No conversation recorded.",
+      content: "# Clinical Summary\n\nNo conversation recorded in this encounter.",
       actions: {
         followUpAppointment: false,
-        labOrder: false
+        labOrder: false,
+        imagingOrder: false,
+        medicationDiscussion: false
+      },
+      stats: {
+        totalExchanges: 0,
+        doctorMessages: 0,
+        patientMessages: 0,
+        repetitionRequests: 0
       }
     };
   }
 
-  // Combine all messages for full-text analysis
-  const fullText = messages.map(msg => `${msg.sender === 'doctor' ? 'Doctor' : 'Patient'}: ${msg.text}`).join('\n');
-  
-  // Extract basic conversation stats
-  const doctorMessages = messages.filter(msg => msg.sender === 'doctor').length;
-  const patientMessages = messages.filter(msg => msg.sender === 'patient').length;
-  const repetitionRequests = messages.filter(msg => msg.isRepetition).length;
-  
-  // Detect actions based on keywords in the conversation
+  // Combine full text for analysis
+  const fullText = messages
+    .map(msg => `${msg.sender === 'doctor' ? 'Doctor' : 'Patient'}: ${msg.text || ''}`)
+    .join('\n');
+
+  const doctorMessages = messages.filter(m => m.sender === 'doctor').length;
+  const patientMessages = messages.filter(m => m.sender === 'patient').length;
+  const repetitionRequests = messages.filter(m => m.isRepetition).length;
+
   const followUpAppointment = detectFollowUpAppointment(fullText);
   const labOrder = detectLabOrder(fullText);
-  
-  // Generate a summary of the conversation
-  const summary = generateSummary(messages, { 
-    doctorMessages, 
+  const imagingOrder = detectImagingOrder(fullText);
+  const medicationDiscussion = detectMedicationDiscussion(fullText);
+
+  const stats = {
+    totalExchanges: messages.length,
+    doctorMessages,
     patientMessages,
-    repetitionRequests,
-    followUpAppointment, 
-    labOrder 
-  });
-  
+    repetitionRequests
+  };
+
+  const actions = {
+    followUpAppointment,
+    labOrder,
+    imagingOrder,
+    medicationDiscussion
+  };
+
+  const summary = generateClinicalSummary(messages, stats, actions);
+
   return {
     content: summary,
-    actions: {
-      followUpAppointment,
-      labOrder
-    }
+    actions,
+    stats
   };
 };
 
-/**
- * Detects if a follow-up appointment was mentioned in the conversation
- */
-function detectFollowUpAppointment(text) {
-  // Keywords related to scheduling follow-up appointments
-  const followUpKeywords = [
-    'follow-up', 'follow up', 'appointment', 'schedule', 'come back', 
-    'see you', 'next visit', 'next week', 'next month',
-    'return visit', 'check again', 'come again',
-    'cita', 'programar', 'próxima visita', 'siguiente cita',
-    'volver', 'regresar', 'revisión'
-  ];
-  
-  return followUpKeywords.some(keyword => 
-    text.toLowerCase().includes(keyword.toLowerCase()));
-}
+function generateClinicalSummary(messages, stats, actions) {
+  let doc = '# Clinical Encounter Summary\n\n';
+  doc += `**Encounter Date:** ${new Date().toLocaleDateString()} | **Encounter Time:** ${new Date().toLocaleTimeString()}\n\n`;
 
-/**
- * Detects if lab orders were mentioned in the conversation
- */
-function detectLabOrder(text) {
-  // Keywords related to lab orders
-  const labKeywords = [
-    'lab', 'test', 'blood', 'specimen', 'sample', 
-    'analysis', 'urine', 'x-ray', 'scan', 'mri', 'ct scan',
-    'laboratorio', 'examen', 'sangre', 'muestra', 'análisis',
-    'orina', 'radiografía', 'rayos x', 'tomografía'
-  ];
-  
-  return labKeywords.some(keyword => 
-    text.toLowerCase().includes(keyword.toLowerCase()));
-}
-
-/**
- * Generates a summary of the conversation
- */
-function generateSummary(messages, stats) {
-  let summary = '# Conversation Summary\n\n';
-  
-  // Add basic statistics
-  summary += `Total exchanges: ${messages.length}\n`;
-  summary += `Doctor messages: ${stats.doctorMessages}\n`;
-  summary += `Patient messages: ${stats.patientMessages}\n`;
-  
-  // Add repetition statistics if any occurred
+  doc += '### Encounter Telemetry\n';
+  doc += `- **Total Dialogue Turns:** ${stats.totalExchanges}\n`;
+  doc += `- **Physician Directives (English):** ${stats.doctorMessages}\n`;
+  doc += `- **Patient Utterances (Spanish):** ${stats.patientMessages}\n`;
   if (stats.repetitionRequests > 0) {
-    summary += `Number of repetition requests: ${stats.repetitionRequests}\n`;
+    doc += `- **Clarification / Repetition Events:** ${stats.repetitionRequests} (handled deterministically)\n`;
   }
-  
-  summary += '\n';
-  
-  // Add detected actions
-  summary += '## Actions Detected\n\n';
-  
-  if (stats.followUpAppointment) {
-    summary += '- ✅ Follow-up appointment mentioned\n';
-  } else {
-    summary += '- ❌ No follow-up appointment discussed\n';
-  }
-  
-  if (stats.labOrder) {
-    summary += '- ✅ Lab order mentioned\n';
-  } else {
-    summary += '- ❌ No lab orders discussed\n';
-  }
-  
-  summary += '\n## Conversation Highlights\n\n';
-  
-  // Add key exchanges (first, last, and up to 3 in the middle)
+  doc += '\n';
+
+  doc += '### Clinical Action Items & Detected Orders\n';
+  doc += actions.followUpAppointment
+    ? '- [x] **Follow-Up Appointment:** Scheduled / Recommended during encounter.\n'
+    : '- [ ] **Follow-Up Appointment:** No explicit follow-up interval discussed.\n';
+
+  doc += actions.labOrder
+    ? '- [x] **Laboratory Diagnostic Orders:** Blood/urine specimen analysis requested.\n'
+    : '- [ ] **Laboratory Diagnostic Orders:** None ordered in this encounter.\n';
+
+  doc += actions.imagingOrder
+    ? '- [x] **Diagnostic Imaging:** Radiography / Sonography / CT scan ordered.\n'
+    : '- [ ] **Diagnostic Imaging:** No imaging indicated.\n';
+
+  doc += actions.medicationDiscussion
+    ? '- [x] **Pharmacotherapy:** Prescription regimen or dosage adjustments reviewed.\n'
+    : '- [ ] **Pharmacotherapy:** No active prescription adjustments noted.\n';
+
+  doc += '\n### Encounter Highlights\n';
   if (messages.length > 0) {
-    // Add first exchange
     const first = messages[0];
-    summary += `- Initial contact: ${first.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${first.text}"\n`;
-    
-    // Add up to 3 messages from the middle if there are enough messages
-    if (messages.length > 5) {
-      const middleStart = Math.floor(messages.length / 4);
-      const middleEnd = Math.floor(messages.length * 3 / 4);
-      
-      for (let i = 0; i < 3; i++) {
-        const idx = middleStart + Math.floor((middleEnd - middleStart) * (i / 2));
-        if (idx > 0 && idx < messages.length - 1) {
-          const msg = messages[idx];
-          summary += `- ${msg.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${msg.text}"${msg.isRepetition ? ' (repeated)' : ''}\n`;
-        }
-      }
+    doc += `- **Chief Complaint / Opening:** ${first.sender === 'doctor' ? 'Physician' : 'Patient'}: "${first.text}"\n`;
+
+    if (messages.length > 3) {
+      const mid = messages[Math.floor(messages.length / 2)];
+      doc += `- **Key Clinical Exchange:** ${mid.sender === 'doctor' ? 'Physician' : 'Patient'}: "${mid.text}"\n`;
     }
-    
-    // Add last exchange if there's more than one message
-    if (messages.length > 1) {
-      const last = messages[messages.length - 1];
-      summary += `- Final exchange: ${last.sender === 'doctor' ? 'Doctor' : 'Patient'} said "${last.text}"${last.isRepetition ? ' (repeated)' : ''}\n`;
-    }
+
+    const last = messages[messages.length - 1];
+    doc += `- **Closing Disposition:** ${last.sender === 'doctor' ? 'Physician' : 'Patient'}: "${last.text}"\n`;
   }
-  
-  // Add full transcript reference
-  summary += '\n## Full Transcript\n\n';
-  messages.forEach((msg, index) => {
-    summary += `${msg.sender === 'doctor' ? 'Doctor' : 'Patient'} (${new Date(msg.timestamp).toLocaleTimeString()})${msg.isRepetition ? ' [REPEATED]' : ''}: ${msg.text}\n`;
+
+  doc += '\n### Full Bilingual Audit Trail\n\n';
+  messages.forEach((msg, idx) => {
+    const roleLabel = msg.sender === 'doctor' ? 'Physician (EN)' : 'Patient (ES)';
+    const repBadge = msg.isRepetition ? ' **[CLARIFICATION REPLAY]**' : '';
+    const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+    doc += `**${idx + 1}. ${roleLabel}** ${timeStr ? `\`${timeStr}\`` : ''}${repBadge}\n`;
+    doc += `> **Spoken:** ${msg.originalText || msg.text}\n`;
     if (msg.originalText && msg.originalText !== msg.text) {
-      summary += `  Original: ${msg.originalText}\n`;
+      doc += `> **Interpreted:** ${msg.text}\n`;
     }
-    if (index < messages.length - 1) summary += '\n';
+    doc += '\n';
   });
-  
-  return summary;
+
+  return doc;
 }

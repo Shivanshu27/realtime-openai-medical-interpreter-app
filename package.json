@@ -1,19 +1,27 @@
 {
-  "name": "interpreter-app",
+  "name": "realtime-medical-interpreter",
   "version": "1.0.0",
-  "description": "Medical interpreter application",
-  "main": "index.js",
+  "description": "Full-duplex real-time medical interpreter application powered by OpenAI Realtime API and WebRTC",
+  "author": "Shivanshu Singla",
+  "license": "MIT",
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && npm start",
-    "client": "cd client && npm start",
-    "install-all": "npm install && cd client && npm install && cd ../server && npm install"
+    "server": "npm --prefix server start",
+    "client": "npm --prefix client start",
+    "build": "npm --prefix client run build",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "npm --prefix server test",
+    "test:client": "npm --prefix client test -- --watchAll=false",
+    "install-all": "npm install && npm --prefix server install && npm --prefix client install",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   },
   "private": true
 }

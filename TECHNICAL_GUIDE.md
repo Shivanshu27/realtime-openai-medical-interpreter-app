@@ -1,131 +1,63 @@
-# Medical Interpreter - Technical Guide
+# Medical Interpreter — Technical Reference Guide
 
-This document provides an overview of the application's architecture, code organization, and key implementation details.
+> [!NOTE]
+> For the comprehensive architecture specification, sequence diagrams, and ADRs, refer to [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/adr/`](docs/adr/).
 
-## Project Structure
+---
 
-The application follows a client-server architecture:
+## 1. System Overview
+
+The Real-Time Medical Interpreter facilitates low-latency, full-duplex speech translation between English-speaking medical providers and Spanish-speaking patients. It combines OpenAI's Realtime API over WebRTC with local speech synthesis fallbacks, deterministic clarification protocols, and automated clinical entity extraction.
+
+---
+
+## 2. Directory Structure
 
 ```
-interpreter-app-1/
-├── client/                 # React frontend application
-│   ├── public/             # Static files
-│   └── src/                # React source code
-│       ├── components/     # UI components
-│       ├── redux/          # Redux state management
-│       ├── services/       # API service wrappers
-│       └── utils/          # Helper functions
-├── server/                 # Node.js backend server
-│   ├── index.js            # Server entry point
-│   └── config.js           # Server configuration
+realtime-openai-medical-interpreter-app/
+├── client/                     # React 18 Frontend SPA
+│   ├── public/                 # HTML templates and static assets
+│   └── src/
+│       ├── components/         # Clinical UI, AudioVisualizer, ScenarioPicker
+│       ├── redux/              # Redux Toolkit state slices
+│       ├── services/           # WebRTC signaling, speech synthesis & scenarios
+│       └── utils/              # Multi-lingual clinical regex analyzer
+├── server/                     # Node.js 20 Express Backend
+│   ├── index.js                # Server entry point & graceful shutdown
+│   └── src/
+│       ├── config/             # Validated configuration & defaults
+│       ├── controllers/        # HTTP handlers (health, session, translation, conversations)
+│       ├── services/           # OpenAI Realtime broker & conversation services
+│       ├── repositories/       # MongoDB driver & resilient In-Memory store
+│       ├── middleware/         # Structured logger, RFC-7807 error handler
+│       └── routes/             # RESTful API v1 & legacy backward-compatible routes
+├── docs/                       # Architecture diagrams, PRD, and ADRs
+└── .github/                    # CI workflows, PR templates, and issue templates
 ```
 
-## Core Components
+---
 
-### Client-Side Components
+## 3. Core Architectural Subsystems
 
-1. **InterpreterInterface**: Main component coordinating recording, translation, and display
-2. **AudioRecorder**: Handles microphone recording and WebRTC connection with OpenAI
-3. **MessageList**: Displays the conversation history with original and translated text
-4. **SummaryPanel**: Shows an analysis of the conversation with detected actions
+### 3.1 WebRTC Audio Pipeline
+- **Signaling:** Client calls `POST /generate-ephemeral-key` (or `/api/session/ephemeral-key`) to fetch a 60-second scoped ephemeral session token.
+- **Peer Connection:** Browser establishes direct WebRTC audio media track (`PCM16 24kHz`) with `https://api.openai.com/v1/realtime`.
+- **Data Channel:** Receives real-time transcript events (`conversation.item.input_audio_transcription.completed`, `response.audio_transcript.done`).
 
-### Redux Store Structure
+### 3.2 Deterministic Repetition Protocol
+Clarification phrases (e.g. `"repeat that"`, `"say that again"`, `"¿puede repetir?"`) are intercepted client-side to replay the previous physician directive from state, preventing LLM semantic drift or hallucination.
 
-The application state is managed through Redux with three main slices:
+### 3.3 Post-Encounter Clinical Extraction
+Evaluates transcripts for:
+- Follow-up appointments and scheduling intents
+- Laboratory orders (blood draws, urine panels)
+- Diagnostic imaging (X-rays, CT scans, MRIs)
+- Pharmacotherapy and prescription instructions
 
-1. **userSlice**: Manages the current user role (doctor/patient) and language preference
-2. **messagesSlice**: Stores the conversation history with translations
-3. **summarySlice**: Contains the post-conversation analysis and summary content
+---
 
-## Key Implementation Details
+## 4. Operational Modes
 
-### Translation Flow
-
-The translation process follows these steps:
-
-1. **Audio Recording**: The AudioRecorder component captures voice input
-2. **Streaming**: Audio is sent to OpenAI's Real-time API using WebRTC
-3. **Processing**: The API transcribes the audio and translates it
-4. **Response**: The translated text is returned and displayed in the interface
-5. **Playback**: The translation is spoken back using either the Web Speech API (mock mode) or OpenAI's TTS
-
-Code flow:
-```
-AudioRecorder.js
-→ startRecording()
-→ setupRealTimeConnection()
-→ dataChannel.onmessage (processes transcription/translation)
-→ onNewMessage() callback to InterpreterInterface.js
-→ Added to Redux store via messagesSlice
-→ Displayed in MessageList component
-```
-
-### Repetition Detection
-
-The application can detect when a user asks for repetition:
-
-1. Analyzes transcribed text for phrases like "repeat that" or "say again"
-2. Retrieves the previous message from the conversation history
-3. Marks the repeated message with an "isRepetition" flag
-4. Plays the translation again and displays it with special styling
-
-### WebRTC Implementation
-
-For real-time communication with OpenAI's API:
-
-1. The client gets an ephemeral API key from the server
-2. Establishes a peer connection with OpenAI's Realtime API
-3. Creates data channels for exchanging control messages
-4. Streams audio data for processing
-5. Receives transcription and translation events in real-time
-
-### Conversation Analysis
-
-After a conversation ends:
-
-1. The `analyzeConversation` utility processes the conversation history
-2. It detects key actions such as follow-up appointments and lab orders
-3. Generates a structured summary with conversation highlights
-4. The summary can be viewed and downloaded by the user
-
-## Mock Mode vs. Real API Mode
-
-The application supports two operational modes:
-
-### Mock Mode
-
-- No external API calls are made
-- Translations are simulated using predefined mappings
-- Audio output uses the browser's Web Speech API
-- Useful for development, testing, or demos without API credentials
-
-### Real API Mode
-
-- Authentication via ephemeral keys generated from the server
-- Live streaming audio to OpenAI's Realtime API
-- Real-time transcription and translation
-- Higher quality and accuracy in translations
-
-## Important Services
-
-### translationService.js
-
-Provides methods for translating text and detecting repetition requests. It handles:
-- Text translation via API or mock responses
-- Speech synthesis for translated content
-- Detection of repetition phrases
-
-### conversationAnalyzer.js
-
-Processes conversation data to:
-- Detect follow-up appointment mentions
-- Identify lab order requests
-- Generate a structured conversation summary with highlights
-
-## Deployment Considerations
-
-1. **Environment Variables**: Ensure all necessary environment variables are set
-2. **API Key Security**: Never expose OpenAI API keys in client-side code
-3. **MongoDB Setup**: Configure a production-ready MongoDB instance
-4. **CORS Configuration**: Update CORS settings for production environments
-5. **WebRTC Support**: Ensure target browsers support WebRTC for audio streaming
+- **Interactive Simulation Mode (Default without API Key):** Zero-credential, offline-capable simulation using the Web Speech API and pre-configured clinical dialogue scenarios.
+- **OpenAI Realtime Mode:** Full neural duplex streaming with `gpt-4o-realtime-preview-2024-12-17`.
+- **Resilient Persistence:** Automatically defaults to an in-memory repository if MongoDB is offline, guaranteeing non-crashing boot.
