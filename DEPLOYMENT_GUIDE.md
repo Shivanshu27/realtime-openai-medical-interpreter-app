@@ -39,8 +39,11 @@ If deploying frontend and backend to distinct hosting targets (e.g. AWS ECS / Cl
    OPENAI_API_KEY=sk-proj-...
    MONGODB_URI=mongodb+srv://...
    MOCK_MODE=false
+   APP_ACCESS_TOKEN=<long random string>             # required: live mode will not start without it
+   CORS_ORIGINS=https://your-frontend-domain.com     # the frontend's exact origin
    ```
-3. Health check probe: `GET /health` (expects HTTP 200).
+3. Health check probe: `GET /health` (expects HTTP 200; it is the only public route).
+4. Rate limits are in-memory per instance. If you run several backend instances, put a shared limiter (for example at the load balancer or API gateway) in front.
 
 ### Frontend Setup
 1. Build the client bundle:

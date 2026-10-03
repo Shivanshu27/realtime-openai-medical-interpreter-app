@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { translateAndSpeak } from '../services/translationService';
 import { useSelector } from 'react-redux';
 import AudioVisualizer from './AudioVisualizer';
+import { apiFetch } from '../services/apiClient';
 
 const MOCK_MODE = process.env.REACT_APP_MOCK_MODE === 'true';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
@@ -133,7 +134,7 @@ const AudioRecorder = ({ onNewMessage, userRole, userLanguage, setStatus }) => {
   const getEphemeralKey = async () => {
     try {
       setStatus('Getting authentication...');
-      const response = await fetch(`${API_URL}/generate-ephemeral-key`, {
+      const response = await apiFetch(`${API_URL}/generate-ephemeral-key`, {
         method: 'POST',
       });
       

@@ -181,8 +181,13 @@ The resulting clinical summary is presented in an interactive card and made avai
 
 ---
 
-## 6. Security & HIPAA Considerations
+## 6. Security Considerations
 
 1. **Ephemeral Credential Scoping:** Client sessions acquire single-use tokens expiring in 60 seconds.
-2. **Zero Audio Retention on Server:** Audio media flows directly over peer-to-peer WebRTC encryption (DTLS/SRTP) between browser and OpenAI gateway. No voice recordings touch the application backend.
-3. **Redactable Transcripts:** Transcript persistence is opt-in; local mock mode stores nothing in non-volatile storage.
+2. **Access Token Gate:** `APP_ACCESS_TOKEN` guards session minting, translation, and transcript routes (`middleware/accessToken.js`, constant-time comparison). Live mode fails closed: the server will not start without a token. A shared code, not per-user identity.
+3. **CORS Allow-List:** `middleware/cors.js` grants only `CORS_ORIGINS` and same-origin requests.
+4. **Rate Limiting:** `middleware/rateLimit.js`, a per-client fixed window, runs before authentication so token guessing is throttled. In-memory, single-process.
+5. **Zero Audio Retention on Server:** Audio media flows directly over peer-to-peer WebRTC encryption (DTLS/SRTP) between browser and OpenAI gateway. No voice recordings touch the application backend.
+6. **Redactable Transcripts:** Transcript persistence is opt-in; local mock mode stores nothing in non-volatile storage.
+
+Not HIPAA-compliant as-is: real patient data would also need per-user authentication, a BAA with the model provider, audit logging, and encryption at rest for transcripts.

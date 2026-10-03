@@ -1,20 +1,35 @@
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const requestLogger = require('./middleware/requestLogger');
 const errorHandler = require('./middleware/errorHandler');
 const apiRoutes = require('./routes/apiRoutes');
 const legacyRoutes = require('./routes/legacyRoutes');
+const defaultConfig = require('./config');
+const corsAllowList = require('./middleware/cors');
+const requireAccessToken = require('./middleware/accessToken');
+const rateLimit = require('./middleware/rateLimit');
 
-function createApp() {
+// Routes that mint billable Realtime sessions, spend model tokens, or touch
+// transcripts (PHI). /health stays public for load balancers.
+const SESSION_PATHS = ['/api/session', '/generate-ephemeral-key'];
+const DATA_PATHS = ['/api/translate', '/translate', '/api/conversations', '/conversations'];
+
+function createApp({ config: cfg = defaultConfig } = {}) {
   const app = express();
 
   // Core Middleware
-  app.use(cors());
+  app.use(corsAllowList(cfg));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(requestLogger);
+
+  // Guards run before the routers. Rate limiting comes first so that guessing
+  // the access token is throttled too.
+  const guard = requireAccessToken(cfg);
+  const windowMs = cfg.rateLimitWindowMs;
+  app.use(SESSION_PATHS, rateLimit({ name: 'session', windowMs, max: cfg.sessionRateLimitMax }), guard);
+  app.use(DATA_PATHS, rateLimit({ name: 'api', windowMs, max: cfg.apiRateLimitMax }), guard);
 
   // Mount API & Legacy routes
   app.use('/api', apiRoutes);

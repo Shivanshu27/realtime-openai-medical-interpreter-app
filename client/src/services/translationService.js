@@ -1,3 +1,4 @@
+import { apiFetch } from './apiClient';
 // Service for clinical translation and text-to-speech
 // Supports both zero-credit simulation mode and live OpenAI Realtime API integration
 
@@ -112,7 +113,7 @@ const simulateTextToSpeech = async (text, language = 'spanish') => {
 
 const openAITranslate = async (text, sourceLanguage, targetLanguage) => {
   try {
-    const response = await fetch(`${API_URL}/api/translate`, {
+    const response = await apiFetch(`${API_URL}/api/translate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

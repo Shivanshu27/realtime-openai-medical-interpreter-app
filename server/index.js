@@ -3,7 +3,8 @@ const config = require('./src/config');
 const { getRepository } = require('./src/repositories');
 
 async function startServer() {
-  const app = createApp();
+  config.validateConfig(config);
+  const app = createApp({ config });
 
   // Initialize storage repository (gracefully falls back if MongoDB is offline)
   const repo = await getRepository();
@@ -16,6 +17,8 @@ async function startServer() {
     console.log(`⚙️  Environment: ${config.nodeEnv}`);
     console.log(`🤖 Mode: ${config.mockMode ? 'SIMULATION (Offline / Zero-Credit)' : 'OPENAI REALTIME (Live API)'}`);
     console.log(`💾 Storage: ${storageType}`);
+    console.log(`🔐 Access token: ${config.accessToken ? 'required' : 'not set (simulation mode only)'}`);
+    console.log(`🌐 CORS origins: ${config.corsOrigins.join(', ')} (+ same-origin)`);
     console.log('====================================================');
   });
 
